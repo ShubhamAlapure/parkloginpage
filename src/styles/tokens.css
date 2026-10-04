@@ -1,0 +1,22 @@
+:root {
+  --color-cream: #FAF6EE;
+  --color-cream-dark: #F0EAD6;
+  --color-sage: #9DB59A;
+  --color-sage-light: #C5D6C3;
+  --color-sage-dark: #6B8A68;
+  --color-forest: #1F3A2D;
+  --color-forest-light: #2D5240;
+  --color-terracotta: #D9765B;
+  --color-terracotta-dark: #BC583D;
+  --color-gold: #F2C879;
+  --color-gold-light: #FDE2A6;
+  --color-sky: #BFE3F2;
+  --color-sky-dark: #8BC3DA;
+  --color-bark: #5C4033;
+
+  --font-serif: 'Fraunces', 'Playfair Display', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+}
