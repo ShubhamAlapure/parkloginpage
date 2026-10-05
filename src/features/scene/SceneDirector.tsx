@@ -101,15 +101,33 @@ export const SceneDirector: React.FC = () => {
     }
   }, [cameraFocusTarget]);
 
-  // Expose Reset Camera function
+  // Expose Reset & Zoom Camera functions
   useEffect(() => {
     (window as any).__resetParkCamera = () => {
       isInteracting.current = false;
       targetCamPos.current.set(-14, 11, 24);
       targetLookAt.current.set(0, 1.5, 0);
     };
+
+    (window as any).__zoomParkCamera = (factor: number) => {
+      if (controlsRef.current) {
+        isInteracting.current = true;
+        if (factor > 0) {
+          controlsRef.current.dollyIn(1 + factor);
+        } else {
+          controlsRef.current.dollyOut(1 + Math.abs(factor));
+        }
+        controlsRef.current.update();
+        if (interactionCooldown.current) clearTimeout(interactionCooldown.current);
+        interactionCooldown.current = window.setTimeout(() => {
+          isInteracting.current = false;
+        }, 3000);
+      }
+    };
+
     return () => {
       delete (window as any).__resetParkCamera;
+      delete (window as any).__zoomParkCamera;
     };
   }, []);
 
