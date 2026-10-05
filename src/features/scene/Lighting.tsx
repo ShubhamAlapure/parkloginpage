@@ -30,8 +30,8 @@ export const Lighting: React.FC = () => {
       hemiGround: '#4D6B3C',
       hemiIntensity: 0.9,
       fogColor: '#CBE5F5',
-      fogNear: 35,
-      fogFar: 140,
+      fogNear: 45,
+      fogFar: 185,
       skyTexture: goldenSky,
       envPreset: 'park' as const,
     },
@@ -43,8 +43,8 @@ export const Lighting: React.FC = () => {
       hemiGround: '#3B522F',
       hemiIntensity: 0.85,
       fogColor: '#F3D1A5',
-      fogNear: 30,
-      fogFar: 130,
+      fogNear: 40,
+      fogFar: 175,
       skyTexture: goldenSky,
       envPreset: 'sunset' as const,
     },
@@ -56,8 +56,8 @@ export const Lighting: React.FC = () => {
       hemiGround: '#2B3D23',
       hemiIntensity: 0.75,
       fogColor: '#E68568',
-      fogNear: 25,
-      fogFar: 120,
+      fogNear: 35,
+      fogFar: 165,
       skyTexture: goldenSky,
       envPreset: 'sunset' as const,
     },
@@ -69,8 +69,8 @@ export const Lighting: React.FC = () => {
       hemiGround: '#070D18',
       hemiIntensity: 0.4,
       fogColor: '#0A1124',
-      fogNear: 20,
-      fogFar: 95,
+      fogNear: 30,
+      fogFar: 150,
       skyTexture: nightSky,
       envPreset: 'night' as const,
     },
@@ -119,7 +119,7 @@ export const Lighting: React.FC = () => {
       />
 
       {/* Photorealistic 360 Sky Panorama Dome */}
-      <mesh position={[0, 0, 0]} scale={[-140, -140, -140]}>
+      <mesh position={[0, 0, 0]} scale={[-190, -190, -190]}>
         <sphereGeometry args={[1, 48, 48]} />
         <meshBasicMaterial
           map={config.skyTexture}

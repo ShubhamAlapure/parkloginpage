@@ -17,6 +17,7 @@ import { Painters } from './Painters/Painter';
 import { Clouds } from './Effects/Clouds';
 import { Particles } from './Effects/Particles';
 import { Birds } from './Effects/Birds';
+import { CitySkyline } from './CitySkyline';
 import { PostFX } from './Effects/PostFX';
 import { SceneDirector } from './SceneDirector';
 import { useAppStore } from '@/app/store';
@@ -87,7 +88,8 @@ export const Scene: React.FC = () => {
           {/* Focal Interactive Painters */}
           <Painters />
 
-          {/* Sky & Atmosphere (with Birds) */}
+          {/* Sky & Atmosphere (with Birds & City Skyline) */}
+          <CitySkyline />
           <Clouds />
           <Particles />
           <Birds />
