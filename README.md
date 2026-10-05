@@ -32,13 +32,5 @@ A production-quality authentication experience featuring a **frosted glassmorphi
 
 ---
 
-## 🚀 Running Locally
 
-```bash
-# Install dependencies
-npm install
-
-# Start the dev server
-npm run dev
-```
 
