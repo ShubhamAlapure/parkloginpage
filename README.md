@@ -42,4 +42,3 @@ npm install
 npm run dev
 ```
 
-Visit [http://localhost:5180](http://localhost:5180) to experience the live application.
