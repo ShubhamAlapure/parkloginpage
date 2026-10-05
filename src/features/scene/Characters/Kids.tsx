@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { Humanoid } from './Humanoid';
+import { Humanoid, HumanoidRef } from './Humanoid';
 import { getTerrainHeight } from '../pathData';
 
 export const Kids: React.FC = () => {
@@ -11,140 +11,260 @@ export const Kids: React.FC = () => {
 
   // Animation References
   const swingGroupRef = useRef<THREE.Group>(null);
+  const swingKidRef = useRef<HumanoidRef>(null);
+
   const slideKidRef = useRef<THREE.Group>(null);
+  const slideKidHumRef = useRef<HumanoidRef>(null);
+
   const tagKid1Ref = useRef<THREE.Group>(null);
+  const tagKid1HumRef = useRef<HumanoidRef>(null);
+
   const tagKid2Ref = useRef<THREE.Group>(null);
+  const tagKid2HumRef = useRef<HumanoidRef>(null);
+
   const ballKid1Ref = useRef<THREE.Group>(null);
+  const ballKid1HumRef = useRef<HumanoidRef>(null);
+
   const ballKid2Ref = useRef<THREE.Group>(null);
+  const ballKid2HumRef = useRef<HumanoidRef>(null);
+
   const ballRef = useRef<THREE.Group>(null);
+
   const kiteKidRef = useRef<THREE.Group>(null);
+  const kiteKidHumRef = useRef<HumanoidRef>(null);
   const kiteObjRef = useRef<THREE.Group>(null);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
 
-    // 1. SWING KID (Realistic Pendulum Kinetics & Leg Extension)
+    // 1. SWING KID (Pendulum physics & leg pumping)
     if (swingGroupRef.current) {
-      const swingAngle = Math.sin(t * 2.3) * 0.58;
+      const swingAngle = Math.sin(t * 2.2) * 0.55;
       swingGroupRef.current.rotation.x = swingAngle;
 
-      const humanoid = swingGroupRef.current.getObjectByName('humanoid');
-      if (humanoid) {
-        // Legs pump forward on front upswing, pull back on down/backswing
-        const legExtension = -swingAngle * 0.85;
-        const leftLeg = humanoid.children[0]?.children[0]?.children[2]; // left leg
-        const rightLeg = humanoid.children[0]?.children[0]?.children[3]; // right leg
-        if (leftLeg) leftLeg.rotation.x = legExtension;
-        if (rightLeg) rightLeg.rotation.x = legExtension;
-      }
+      const legExtension = -swingAngle * 0.9;
+      swingKidRef.current?.setPose({
+        leftHipPitch: Math.PI / 2 + legExtension,
+        rightHipPitch: Math.PI / 2 + legExtension,
+        leftKneeFlex: Math.max(0.1, -swingAngle * 0.6),
+        rightKneeFlex: Math.max(0.1, -swingAngle * 0.6),
+        leftShoulderPitch: -1.1 + swingAngle * 0.2,
+        rightShoulderPitch: -1.1 + swingAngle * 0.2,
+        leftElbowFlex: 0.8,
+        rightElbowFlex: 0.8,
+      });
     }
 
-    // 2. SLIDE KID (Cycle: 0-3.5s climb rungs, 3.5-5.2s slide with arms raised, 5.2-7.5s run back)
+    // 2. SLIDE KID (Climb -> Slide -> Run cycle)
     if (slideKidRef.current) {
-      const cycle = (t * 0.55) % 7.5;
+      const cycle = (t * 0.5) % 8.0;
       if (cycle < 3.2) {
         // Climbing ladder
         const climbP = cycle / 3.2;
+        const climbStep = Math.sin(cycle * 12);
         slideKidRef.current.position.set(2.8, 0.2 + climbP * 1.05, -0.4 + (1 - climbP) * 0.6);
         slideKidRef.current.rotation.set(0, Math.PI, 0);
+
+        slideKidHumRef.current?.setPose({
+          leftHipPitch: climbStep * 0.4,
+          rightHipPitch: -climbStep * 0.4,
+          leftKneeFlex: Math.max(0.2, climbStep * 0.8),
+          rightKneeFlex: Math.max(0.2, -climbStep * 0.8),
+          leftShoulderPitch: -0.9 - climbStep * 0.3,
+          rightShoulderPitch: -0.9 + climbStep * 0.3,
+          leftElbowFlex: 1.0,
+          rightElbowFlex: 1.0,
+        });
       } else if (cycle < 5.0) {
-        // Sliding down with arms raised
+        // Sliding down with arms raised joyfully
         const slideP = (cycle - 3.2) / 1.8;
         slideKidRef.current.position.set(2.8, 1.25 - slideP * 1.05, -1.0 - slideP * 1.45);
         slideKidRef.current.rotation.set(-0.52, 0, 0);
+
+        slideKidHumRef.current?.setPose({
+          leftHipPitch: 1.1,
+          rightHipPitch: 1.1,
+          leftKneeFlex: 0.2,
+          rightKneeFlex: 0.2,
+          leftShoulderPitch: -1.6,
+          rightShoulderPitch: -1.6,
+          leftElbowFlex: 0.3,
+          rightElbowFlex: 0.3,
+          headPitch: 0.2,
+        });
       } else {
         // Running back to ladder
-        const runP = (cycle - 5.0) / 2.5;
+        const runP = (cycle - 5.0) / 3.0;
+        const runPhase = t * 14.0;
         slideKidRef.current.position.set(
-          2.8 + Math.sin(runP * Math.PI) * 0.8,
+          2.8 + Math.sin(runP * Math.PI) * 0.7,
           0.1,
           -2.45 + runP * 2.65
         );
         slideKidRef.current.rotation.set(0, 0, 0);
+
+        slideKidHumRef.current?.setPose({
+          bob: Math.abs(Math.sin(runPhase)) * 0.05,
+          leftHipPitch: Math.sin(runPhase) * 0.6,
+          rightHipPitch: -Math.sin(runPhase) * 0.6,
+          leftKneeFlex: Math.max(0.1, Math.sin(runPhase - 0.7) * 1.2),
+          rightKneeFlex: Math.max(0.1, Math.sin(runPhase + Math.PI - 0.7) * 1.2),
+          leftShoulderPitch: -Math.sin(runPhase) * 0.8,
+          rightShoulderPitch: Math.sin(runPhase) * 0.8,
+          leftElbowFlex: 1.1,
+          rightElbowFlex: 1.1,
+        });
       }
     }
 
-    // 3. TAG CHASE KIDS (Leaning into arcs with lively kid gaits)
+    // 3. TAG CHASE KIDS (Dynamic arc running)
     const tagCenter = new THREE.Vector2(-8, 14);
-    const tagSpeed = t * 1.5;
+    const tagSpeed = t * 1.4;
+    const tagRunCadence = t * 13.0;
+
     if (tagKid1Ref.current) {
-      const r1 = 3.4 + Math.sin(t * 0.9) * 0.5;
+      const r1 = 3.4 + Math.sin(t * 0.8) * 0.5;
       const x1 = tagCenter.x + Math.cos(tagSpeed) * r1;
       const z1 = tagCenter.y + Math.sin(tagSpeed) * r1;
       const y1 = getTerrainHeight(x1, z1);
       tagKid1Ref.current.position.set(x1, y1, z1);
       tagKid1Ref.current.rotation.y = -tagSpeed + Math.PI / 2;
-      tagKid1Ref.current.rotation.z = -0.15; // Centripetal inward lean
+      tagKid1Ref.current.rotation.z = -0.12;
+
+      tagKid1HumRef.current?.setPose({
+        bob: Math.abs(Math.sin(tagRunCadence)) * 0.06,
+        leftHipPitch: Math.sin(tagRunCadence) * 0.65,
+        rightHipPitch: -Math.sin(tagRunCadence) * 0.65,
+        leftKneeFlex: Math.max(0.1, Math.sin(tagRunCadence - 0.7) * 1.3),
+        rightKneeFlex: Math.max(0.1, Math.sin(tagRunCadence + Math.PI - 0.7) * 1.3),
+        leftShoulderPitch: -Math.sin(tagRunCadence) * 0.9,
+        rightShoulderPitch: Math.sin(tagRunCadence) * 0.9,
+        leftElbowFlex: 1.2,
+        rightElbowFlex: 1.2,
+      });
     }
+
     if (tagKid2Ref.current) {
       const tagLag = tagSpeed - 0.65;
-      const r2 = 3.2 + Math.sin(t * 0.9 + 0.4) * 0.5;
+      const r2 = 3.2 + Math.sin(t * 0.8 + 0.4) * 0.5;
       const x2 = tagCenter.x + Math.cos(tagLag) * r2;
       const z2 = tagCenter.y + Math.sin(tagLag) * r2;
       const y2 = getTerrainHeight(x2, z2);
       tagKid2Ref.current.position.set(x2, y2, z2);
       tagKid2Ref.current.rotation.y = -tagLag + Math.PI / 2;
-      tagKid2Ref.current.rotation.z = -0.15;
+      tagKid2Ref.current.rotation.z = -0.12;
+
+      tagKid2HumRef.current?.setPose({
+        bob: Math.abs(Math.sin(tagRunCadence + 1.2)) * 0.06,
+        leftHipPitch: Math.sin(tagRunCadence + 1.2) * 0.65,
+        rightHipPitch: -Math.sin(tagRunCadence + 1.2) * 0.65,
+        leftKneeFlex: Math.max(0.1, Math.sin(tagRunCadence + 0.5) * 1.3),
+        rightKneeFlex: Math.max(0.1, Math.sin(tagRunCadence + Math.PI + 0.5) * 1.3),
+        leftShoulderPitch: -Math.sin(tagRunCadence + 1.2) * 0.9,
+        rightShoulderPitch: Math.sin(tagRunCadence + 1.2) * 0.9,
+        leftElbowFlex: 1.2,
+        rightElbowFlex: 1.2,
+      });
     }
 
-    // 4. BALL GAME (Realistic Parabolic Arc with Dynamic Player Kicks & Receptions)
+    // 4. BALL GAME (Soccer ball pass with kicking poses)
     const k1Pos = new THREE.Vector3(-2, getTerrainHeight(-2, 11), 11);
     const k2Pos = new THREE.Vector3(3, getTerrainHeight(3, 13), 13);
     if (ballKid1Ref.current) ballKid1Ref.current.position.copy(k1Pos);
     if (ballKid2Ref.current) ballKid2Ref.current.position.copy(k2Pos);
 
     if (ballRef.current) {
-      const ballCycle = (t * 1.3) % 2;
-      const isForward = ballCycle < 1;
-      const frac = isForward ? ballCycle : ballCycle - 1;
+      const ballCycle = (t * 1.2) % 2.0;
+      const isForward = ballCycle < 1.0;
+      const frac = isForward ? ballCycle : ballCycle - 1.0;
       const start = isForward ? k1Pos : k2Pos;
-      const target = isForward ? k2Pos : k1Pos;
+      const end = isForward ? k2Pos : k1Pos;
 
-      const currentX = THREE.MathUtils.lerp(start.x, target.x, frac);
-      const currentZ = THREE.MathUtils.lerp(start.z, target.z, frac);
-      const arcHeight = Math.sin(frac * Math.PI) * 1.75;
+      const currentX = THREE.MathUtils.lerp(start.x, end.x, frac);
+      const currentZ = THREE.MathUtils.lerp(start.z, end.z, frac);
       const groundY = getTerrainHeight(currentX, currentZ);
-      const currentY = groundY + 0.15 + arcHeight;
+      const arcHeight = Math.sin(frac * Math.PI) * 1.6;
 
-      ballRef.current.position.set(currentX, currentY, currentZ);
-      ballRef.current.rotation.x += isForward ? 0.25 : -0.25;
-      ballRef.current.rotation.y += 0.1;
+      ballRef.current.position.set(currentX, groundY + 0.16 + arcHeight, currentZ);
+      ballRef.current.rotation.x += 12 * 0.016;
+      ballRef.current.rotation.z += 8 * 0.016;
+
+      // Animate kicker vs receiver
+      if (frac < 0.25) {
+        if (isForward) {
+          ballKid1HumRef.current?.setPose({
+            rightHipPitch: -0.6,
+            rightKneeFlex: 0.8,
+            leftShoulderPitch: 0.4,
+            rightShoulderPitch: -0.5,
+          });
+        } else {
+          ballKid2HumRef.current?.setPose({
+            rightHipPitch: -0.6,
+            rightKneeFlex: 0.8,
+            leftShoulderPitch: 0.4,
+            rightShoulderPitch: -0.5,
+          });
+        }
+      } else {
+        ballKid1HumRef.current?.setPose({
+          rightHipPitch: 0.1,
+          rightKneeFlex: 0.15,
+          leftShoulderPitch: 0.1,
+          rightShoulderPitch: -0.1,
+        });
+        ballKid2HumRef.current?.setPose({
+          rightHipPitch: 0.1,
+          rightKneeFlex: 0.15,
+          leftShoulderPitch: 0.1,
+          rightShoulderPitch: -0.1,
+        });
+      }
     }
 
-    // 5. KITE FLYER (Running on lawn, looking back up at high fluttering kite)
-    if (kiteKidRef.current && kiteObjRef.current) {
-      const kiteRunAngle = t * 0.55;
-      const kx = 10 + Math.cos(kiteRunAngle) * 7.5;
-      const kz = -14 + Math.sin(kiteRunAngle) * 5.5;
-      const ky = getTerrainHeight(kx, kz);
+    // 5. KITE FLYER KID
+    if (kiteKidRef.current) {
+      const kiteX = 16 + Math.sin(t * 0.6) * 4;
+      const kiteZ = 2 + Math.cos(t * 0.6) * 3;
+      const kiteY = getTerrainHeight(kiteX, kiteZ);
+      kiteKidRef.current.position.set(kiteX, kiteY, kiteZ);
+      kiteKidRef.current.rotation.y = t * 0.6 + Math.PI / 2;
 
-      kiteKidRef.current.position.set(kx, ky, kz);
-      kiteKidRef.current.rotation.y = -kiteRunAngle + Math.PI / 2;
+      const kiteRun = t * 9.0;
+      kiteKidHumRef.current?.setPose({
+        bob: Math.abs(Math.sin(kiteRun)) * 0.04,
+        leftHipPitch: Math.sin(kiteRun) * 0.45,
+        rightHipPitch: -Math.sin(kiteRun) * 0.45,
+        leftKneeFlex: Math.max(0.1, Math.sin(kiteRun - 0.6) * 0.9),
+        rightKneeFlex: Math.max(0.1, Math.sin(kiteRun + Math.PI - 0.6) * 0.9),
+        rightShoulderPitch: -1.4, // Right arm high holding kite string
+        rightElbowFlex: 0.4,
+        leftShoulderPitch: 0.3,
+        leftElbowFlex: 0.5,
+        headPitch: 0.3, // Looking up at kite
+      });
 
-      // High Fluttering Diamond Kite
-      const kiteHighX = kx - Math.sin(kiteRunAngle) * 4.5;
-      const kiteHighY = ky + 8.5 + Math.sin(t * 3.2) * 0.45;
-      const kiteHighZ = kz + Math.cos(kiteRunAngle) * 4.5;
-      kiteObjRef.current.position.set(kiteHighX, kiteHighY, kiteHighZ);
-      kiteObjRef.current.rotation.set(0.35, kiteRunAngle, Math.sin(t * 4.5) * 0.25);
+      if (kiteObjRef.current) {
+        const kx = kiteX - 6 + Math.sin(t * 1.5) * 1.2;
+        const kz = kiteZ + 5 + Math.cos(t * 1.3) * 1.2;
+        const ky = kiteY + 7.5 + Math.sin(t * 2.0) * 0.8;
+        kiteObjRef.current.position.set(kx, ky, kz);
+        kiteObjRef.current.rotation.z = Math.sin(t * 2.5) * 0.25;
+        kiteObjRef.current.rotation.x = Math.sin(t * 1.8) * 0.2;
+      }
     }
   });
 
-  const t = typeof window !== 'undefined' ? Date.now() * 0.001 : 0;
-  const ballCycle = (t * 1.3) % 2;
-  const isKicking1 = ballCycle < 0.3;
-  const isKicking2 = ballCycle >= 1.0 && ballCycle < 1.3;
-
   return (
     <group>
-      {/* 1. SWING KID WITH HANDS GRIPPING CHAINS */}
-      <group position={[pgX - 2.5, pgY + 2.75, pgZ]}>
-        <group ref={swingGroupRef}>
-          {/* Swing Chains */}
-          {[-0.22, 0.22].map((x, i) => (
-            <mesh key={i} position={[x, -1.05, 0]}>
-              <cylinderGeometry args={[0.007, 0.007, 2.1, 6]} />
-              <meshStandardMaterial color="#475569" metalness={0.8} />
+      {/* 1. SWING KID */}
+      <group position={[pgX + 3.5, pgY, pgZ + 1.2]}>
+        <group ref={swingGroupRef} position={[0, 2.4, 0]}>
+          {/* Swing Ropes */}
+          {[-0.22, 0.22].map((rx, ri) => (
+            <mesh key={`rope-${ri}`} position={[rx, -1.04, 0]}>
+              <cylinderGeometry args={[0.012, 0.012, 2.08, 6]} />
+              <meshStandardMaterial color="#B08968" roughness={0.9} />
             </mesh>
           ))}
           {/* Wooden Seat */}
@@ -153,8 +273,9 @@ export const Kids: React.FC = () => {
             <meshStandardMaterial color="#8A5A36" roughness={0.7} />
           </mesh>
           {/* Child sitting on swing */}
-          <group position={[0, -2.08, 0]} name="humanoid">
+          <group position={[0, -2.08, 0]}>
             <Humanoid
+              ref={swingKidRef}
               isSitting={true}
               scale={0.68}
               skinColor="#F5D0A9"
@@ -163,10 +284,6 @@ export const Kids: React.FC = () => {
               shoesColor="#FFFFFF"
               hairColor="#D97706"
               hairStyle="ponytail"
-              leftShoulderPitch={-1.1}
-              leftElbowFlex={0.8}
-              rightShoulderPitch={-1.1}
-              rightElbowFlex={0.8}
             />
           </group>
         </group>
@@ -176,6 +293,7 @@ export const Kids: React.FC = () => {
       <group position={[pgX, pgY, pgZ]}>
         <group ref={slideKidRef}>
           <Humanoid
+            ref={slideKidHumRef}
             scale={0.65}
             skinColor="#E5A97D"
             shirtColor="#FBBF24"
@@ -183,10 +301,6 @@ export const Kids: React.FC = () => {
             shoesColor="#EF4444"
             hairColor="#374151"
             hairStyle="short"
-            leftShoulderPitch={-1.2}
-            leftElbowFlex={0.4}
-            rightShoulderPitch={-1.2}
-            rightElbowFlex={0.4}
           />
         </group>
       </group>
@@ -194,6 +308,7 @@ export const Kids: React.FC = () => {
       {/* 3. TAG CHASE KIDS */}
       <group ref={tagKid1Ref}>
         <Humanoid
+          ref={tagKid1HumRef}
           scale={0.68}
           skinColor="#E0AC69"
           shirtColor="#EF4444"
@@ -203,18 +318,11 @@ export const Kids: React.FC = () => {
           hairStyle="short"
           hasHat={true}
           hatColor="#FCD34D"
-          leftShoulderPitch={-0.6}
-          leftElbowFlex={0.85}
-          rightShoulderPitch={0.5}
-          rightElbowFlex={0.85}
-          leftHipPitch={0.45}
-          leftKneeFlex={0.6}
-          rightHipPitch={-0.45}
-          rightKneeFlex={0.2}
         />
       </group>
       <group ref={tagKid2Ref}>
         <Humanoid
+          ref={tagKid2HumRef}
           scale={0.65}
           skinColor="#F0C29E"
           shirtColor="#10B981"
@@ -222,21 +330,13 @@ export const Kids: React.FC = () => {
           shoesColor="#3B82F6"
           hairColor="#1F2937"
           hairStyle="curly"
-          leftShoulderPitch={0.5}
-          leftElbowFlex={0.85}
-          rightShoulderPitch={-0.6}
-          rightElbowFlex={0.85}
-          leftHipPitch={-0.45}
-          leftKneeFlex={0.2}
-          rightHipPitch={0.45}
-          rightKneeFlex={0.6}
         />
       </group>
 
       {/* 4. BALL GAME KIDS & SOCCER BALL */}
-      {/* Player 1 (Purple Shirt, White Shorts) in Athletic Ready Stance & Kick Motion */}
       <group ref={ballKid1Ref} rotation={[0, 0.72, 0]}>
         <Humanoid
+          ref={ballKid1HumRef}
           scale={0.72}
           skinColor="#C68642"
           shirtColor="#8B5CF6"
@@ -244,128 +344,77 @@ export const Kids: React.FC = () => {
           shoesColor="#1E293B"
           hairColor="#18181B"
           hairStyle="short"
-          headPitch={-0.15}
-          headYaw={0.12}
-          leftShoulderPitch={-0.55}
-          leftShoulderRoll={0.2}
-          leftElbowFlex={0.95}
-          rightShoulderPitch={-0.45}
-          rightShoulderRoll={-0.2}
-          rightElbowFlex={0.85}
-          leftHipPitch={-0.12}
-          leftKneeFlex={0.25}
-          rightHipPitch={isKicking1 ? 0.65 : 0.18}
-          rightKneeFlex={isKicking1 ? 0.12 : 0.35}
         />
       </group>
 
-      {/* Player 2 (Cyan Shirt, Dark Shorts) in Receiving Stance */}
-      <group ref={ballKid2Ref} rotation={[0, -2.38, 0]}>
+      <group ref={ballKid2Ref} rotation={[0, -2.4, 0]}>
         <Humanoid
-          scale={0.72}
-          skinColor="#E5A97D"
+          ref={ballKid2HumRef}
+          scale={0.7}
+          skinColor="#F5D0A9"
           shirtColor="#06B6D4"
           pantsColor="#334155"
-          shoesColor="#FFFFFF"
+          shoesColor="#F59E0B"
           hairColor="#78350F"
           hairStyle="short"
-          headPitch={-0.15}
-          headYaw={-0.1}
-          leftShoulderPitch={-0.5}
-          leftShoulderRoll={0.2}
-          leftElbowFlex={0.9}
-          rightShoulderPitch={-0.5}
-          rightShoulderRoll={-0.2}
-          rightElbowFlex={0.9}
-          leftHipPitch={isKicking2 ? 0.65 : 0.15}
-          leftKneeFlex={isKicking2 ? 0.12 : 0.32}
-          rightHipPitch={-0.1}
-          rightKneeFlex={0.25}
+          hasHat={true}
+          hatColor="#0284C7"
         />
       </group>
 
-      {/* Realistic Patterned Soccer Ball */}
+      {/* Soccer Ball */}
       <group ref={ballRef}>
-        <mesh castShadow>
-          <sphereGeometry args={[0.22, 16, 16]} />
-          <meshStandardMaterial color="#FFFFFF" roughness={0.3} metalness={0.1} />
+        <mesh castShadow receiveShadow>
+          <sphereGeometry args={[0.16, 16, 16]} />
+          <meshStandardMaterial color="#FFFFFF" roughness={0.4} />
         </mesh>
         {/* Black Pentagon patches */}
-        {[-0.14, 0.14].map((px, i) => (
-          <mesh key={i} position={[px, 0.08, 0.12]}>
-            <dodecahedronGeometry args={[0.07, 0]} />
-            <meshStandardMaterial color="#111827" roughness={0.4} />
+        {[
+          [0, 0.16, 0],
+          [0, -0.16, 0],
+          [0.15, 0.05, 0],
+          [-0.15, 0.05, 0],
+          [0, 0.05, 0.15],
+          [0, 0.05, -0.15],
+        ].map(([px, py, pz], pi) => (
+          <mesh key={pi} position={[px, py, pz]}>
+            <sphereGeometry args={[0.045, 6, 6]} />
+            <meshStandardMaterial color="#0F172A" roughness={0.3} />
           </mesh>
         ))}
       </group>
 
-      {/* 5. SANDBOX KID (Sitting playing with sand bucket & shovel) */}
-      <group position={[pgX - 2.8, pgY + 0.1, pgZ - 2.8]}>
-        <group position={[0.2, 0.08, -0.1]} rotation={[0.4, 0.25, 0]}>
-          <Humanoid
-            scale={0.62}
-            isSitting={true}
-            skinColor="#F5D0A9"
-            shirtColor="#14B8A6"
-            pantsColor="#E2E8F0"
-            shoesColor="#3B82F6"
-            hairColor="#B45309"
-            hairStyle="short"
-            headPitch={0.4} // Looking down at sandcastle
-            leftShoulderPitch={-0.6}
-            leftElbowFlex={1.1}
-            rightShoulderPitch={-0.7}
-            rightElbowFlex={1.2}
-          />
-          {/* Toy Sand Bucket & Shovel */}
-          <mesh position={[-0.2, 0.1, 0.2]} castShadow>
-            <cylinderGeometry args={[0.08, 0.06, 0.14, 10]} />
-            <meshStandardMaterial color="#3B82F6" roughness={0.5} />
-          </mesh>
-          <mesh position={[0.18, 0.12, 0.22]} rotation={[0.6, 0.4, 0]} castShadow>
-            <boxGeometry args={[0.035, 0.18, 0.07]} />
-            <meshStandardMaterial color="#EF4444" roughness={0.5} />
-          </mesh>
-        </group>
-      </group>
-
-      {/* 6. KITE RUNNER & FLUTTERING KITE */}
+      {/* 5. KITE FLYER KID */}
       <group ref={kiteKidRef}>
         <Humanoid
-          scale={0.72}
-          skinColor="#F0C29E"
+          ref={kiteKidHumRef}
+          scale={0.7}
+          skinColor="#E0AC69"
           shirtColor="#F97316"
           pantsColor="#1E293B"
-          shoesColor="#FFFFFF"
-          hairColor="#4A2810"
+          shoesColor="#10B981"
+          hairColor="#29180E"
           hairStyle="short"
-          headPitch={-0.45} // Looking up at sky
-          headYaw={-0.5}   // Looking back at trailing kite
-          rightShoulderPitch={-1.5} // Right arm raised holding kite line
-          rightElbowFlex={0.4}
+          hasHat={true}
+          hatColor="#E11D48"
         />
-        {/* String Spool in Right Hand */}
-        <mesh position={[0.18, 0.88, 0.12]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.03, 0.03, 0.06, 8]} />
-          <meshStandardMaterial color="#854D0E" />
-        </mesh>
       </group>
 
-      {/* Trailing High-Flying Diamond Kite */}
+      {/* Flying Diamond Kite */}
       <group ref={kiteObjRef}>
-        <mesh rotation={[0, 0, Math.PI / 4]} castShadow>
-          <planeGeometry args={[0.95, 0.95]} />
-          <meshStandardMaterial color="#EF4444" roughness={0.5} side={THREE.DoubleSide} />
+        <mesh castShadow>
+          <boxGeometry args={[0.95, 0.015, 0.95]} />
+          <meshStandardMaterial color="#EF4444" roughness={0.5} />
         </mesh>
-        <mesh rotation={[0, 0, Math.PI / 4]} position={[0, 0, 0.01]}>
-          <planeGeometry args={[0.48, 0.48]} />
-          <meshStandardMaterial color="#FBBF24" roughness={0.5} side={THREE.DoubleSide} />
+        <mesh position={[0, 0.01, 0]}>
+          <boxGeometry args={[0.55, 0.018, 0.55]} />
+          <meshStandardMaterial color="#FACC15" roughness={0.5} />
         </mesh>
-        {/* Fluttering Tail Bows */}
-        {[1, 2, 3, 4, 5].map((bowIdx) => (
-          <mesh key={bowIdx} position={[0, -bowIdx * 0.38, 0]} scale={0.16}>
-            <dodecahedronGeometry args={[0.55, 0]} />
-            <meshStandardMaterial color={bowIdx % 2 === 0 ? '#3B82F6' : '#10B981'} />
+        {/* Kite Tail Ribbons */}
+        {[0.6, 1.1, 1.6, 2.1].map((ty, ti) => (
+          <mesh key={ti} position={[0, -ty, ty * 0.4]} rotation={[0.4, 0, Math.sin(ti) * 0.4]}>
+            <boxGeometry args={[0.18, 0.08, 0.01]} />
+            <meshStandardMaterial color={ti % 2 === 0 ? '#3B82F6' : '#10B981'} />
           </mesh>
         ))}
       </group>

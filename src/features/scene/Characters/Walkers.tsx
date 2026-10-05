@@ -30,12 +30,14 @@ const WalkerAgent: React.FC<{ cfg: CharacterConfig; index: number }> = ({ cfg, i
   const groupRef = useRef<THREE.Group>(null);
   const humanoidRef = useRef<HumanoidRef>(null);
   const progressRef = useRef(cfg.offset);
+  const currentYawRef = useRef(0);
+  const isInitialized = useRef(false);
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return;
     const t = clock.getElapsedTime();
 
-    // 1. Advance position along spline
+    // 1. Advance position along spline smoothly
     progressRef.current = (progressRef.current + cfg.speed * delta) % 1.0;
     const prog = progressRef.current;
 
@@ -49,20 +51,27 @@ const WalkerAgent: React.FC<{ cfg: CharacterConfig; index: number }> = ({ cfg, i
 
     groupRef.current.position.copy(finalPos);
 
-    // Orientation with forward pitch for runners
-    const lookTarget = finalPos.clone().add(tangent);
-    groupRef.current.lookAt(lookTarget);
-
-    const isRunning = cfg.mode === 'sprint' || cfg.mode === 'jog';
-    if (cfg.mode === 'sprint') {
-      groupRef.current.rotation.x += 0.26; // 15° forward sprint torso drive
-    } else if (cfg.mode === 'jog') {
-      groupRef.current.rotation.x += 0.16; // 9° forward jog lean
+    // 2. Compute smooth yaw orientation without gimbal snapping
+    const targetYaw = Math.atan2(tangent.x, tangent.z);
+    if (!isInitialized.current) {
+      currentYawRef.current = targetYaw;
+      isInitialized.current = true;
+    } else {
+      // Smooth angle interpolation handling wrap-around
+      let diff = targetYaw - currentYawRef.current;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      currentYawRef.current += diff * Math.min(1.0, 10.0 * delta);
     }
 
-    // 2. Compute Biomechanical Gait Kinematics
-    const cadence = cfg.mode === 'sprint' ? 15.5 : cfg.mode === 'jog' ? 12.5 : 5.8;
-    const phase = t * cadence + index * 1.8;
+    const isRunning = cfg.mode === 'sprint' || cfg.mode === 'jog';
+    const pitchLean = cfg.mode === 'sprint' ? 0.22 : cfg.mode === 'jog' ? 0.14 : 0.04;
+
+    groupRef.current.rotation.set(pitchLean, currentYawRef.current, 0, 'YXZ');
+
+    // 3. Biomechanical Gait Kinematics
+    const cadence = cfg.mode === 'sprint' ? 14.5 : cfg.mode === 'jog' ? 11.8 : 5.4;
+    const phase = t * cadence + index * 2.1;
 
     let bob = 0;
     let pelvisSway = 0;
@@ -85,74 +94,81 @@ const WalkerAgent: React.FC<{ cfg: CharacterConfig; index: number }> = ({ cfg, i
     if (isRunning) {
       const isSprint = cfg.mode === 'sprint';
 
-      // Flight suspension bounce
-      bob = Math.abs(Math.sin(phase)) * (isSprint ? 0.1 : 0.075);
+      // Flight suspension bounce (high at mid-air, drops on foot strike)
+      bob = Math.abs(Math.sin(phase)) * (isSprint ? 0.095 : 0.07);
 
       // Pelvic tilt and twist
-      pelvisSway = Math.sin(phase) * (isSprint ? 0.06 : 0.04);
-      pelvisYaw = Math.sin(phase) * (isSprint ? 0.12 : 0.08);
-      spineTwist = -pelvisYaw * 1.25;
+      pelvisSway = Math.sin(phase) * (isSprint ? 0.05 : 0.035);
+      pelvisYaw = Math.sin(phase) * (isSprint ? 0.1 : 0.07);
+      spineTwist = -pelvisYaw * 1.2;
 
-      // High knee drive and deep backwards knee flexion
-      const hipRange = isSprint ? 0.78 : 0.62;
+      // Leg stride kinematics
+      const hipRange = isSprint ? 0.72 : 0.58;
       leftHipPitch = Math.sin(phase) * hipRange;
       rightHipPitch = -leftHipPitch;
 
-      leftKneeFlex = Math.max(0.08, (Math.sin(phase - 0.75) + 0.2) * (isSprint ? 1.65 : 1.3));
-      rightKneeFlex = Math.max(0.08, (Math.sin(phase + Math.PI - 0.75) + 0.2) * (isSprint ? 1.65 : 1.3));
+      // Knee flexion during backswing & high front lift
+      leftKneeFlex = Math.max(0.1, (Math.sin(phase - 0.7) + 0.25) * (isSprint ? 1.5 : 1.2));
+      rightKneeFlex = Math.max(0.1, (Math.sin(phase + Math.PI - 0.7) + 0.25) * (isSprint ? 1.5 : 1.2));
 
       // Ankle push-off vs heel landing
-      leftAnklePitch = Math.sin(phase + 0.35) * (isSprint ? 0.36 : 0.26);
-      rightAnklePitch = Math.sin(phase + Math.PI + 0.35) * (isSprint ? 0.36 : 0.26);
+      leftAnklePitch = Math.sin(phase + 0.3) * (isSprint ? 0.32 : 0.24);
+      rightAnklePitch = Math.sin(phase + Math.PI + 0.3) * (isSprint ? 0.32 : 0.24);
 
-      // 90° arm drive
-      leftShoulderPitch = -leftHipPitch * (isSprint ? 1.18 : 1.0);
-      rightShoulderPitch = -rightHipPitch * (isSprint ? 1.18 : 1.0);
-      leftElbowFlex = isSprint ? 1.5 : 1.3;
-      rightElbowFlex = isSprint ? 1.5 : 1.3;
+      // Reciprocal 90° arm drive
+      leftShoulderPitch = -leftHipPitch * 1.05;
+      rightShoulderPitch = -rightHipPitch * 1.05;
+      leftElbowFlex = isSprint ? 1.45 : 1.25;
+      rightElbowFlex = isSprint ? 1.45 : 1.25;
 
-      headPitch = -0.1;
+      headPitch = -0.08;
+      headYaw = Math.sin(t * 1.2) * 0.06;
     } else {
       const isPower = cfg.mode === 'power-walk';
 
-      bob = Math.abs(Math.sin(phase)) * (isPower ? 0.04 : 0.028);
-      pelvisSway = Math.sin(phase) * 0.05;
-      pelvisYaw = Math.sin(phase) * 0.06;
-      spineTwist = -pelvisYaw * 1.15;
+      // Gentle walking bob
+      bob = Math.abs(Math.sin(phase)) * (isPower ? 0.038 : 0.026);
+      pelvisSway = Math.sin(phase) * 0.045;
+      pelvisYaw = Math.sin(phase) * 0.055;
+      spineTwist = -pelvisYaw * 1.1;
 
-      const maxHip = isPower ? 0.52 : 0.42;
+      const maxHip = isPower ? 0.48 : 0.38;
       leftHipPitch = Math.sin(phase) * maxHip;
       rightHipPitch = -leftHipPitch;
 
-      leftKneeFlex = Math.max(0.04, Math.sin(phase - 0.7) * (isPower ? 0.82 : 0.65));
-      rightKneeFlex = Math.max(0.04, Math.sin(phase + Math.PI - 0.7) * (isPower ? 0.82 : 0.65));
+      // Smooth knee flexion on swing leg
+      leftKneeFlex = Math.max(0.04, Math.sin(phase - 0.65) * (isPower ? 0.75 : 0.58));
+      rightKneeFlex = Math.max(0.04, Math.sin(phase + Math.PI - 0.65) * (isPower ? 0.75 : 0.58));
 
-      leftAnklePitch = Math.sin(phase + 0.4) * 0.24;
-      rightAnklePitch = Math.sin(phase + Math.PI + 0.4) * 0.24;
+      // Ankle rolling through stride
+      leftAnklePitch = Math.sin(phase + 0.35) * 0.22;
+      rightAnklePitch = Math.sin(phase + Math.PI + 0.35) * 0.22;
 
-      leftShoulderPitch = -leftHipPitch * 0.75;
-      rightShoulderPitch = -rightHipPitch * 0.75;
-      leftElbowFlex = 0.25 + Math.max(0, leftShoulderPitch) * 0.5;
-      rightElbowFlex = 0.25 + Math.max(0, rightShoulderPitch) * 0.5;
+      // Natural pendulum arm swing
+      leftShoulderPitch = -leftHipPitch * 0.72;
+      rightShoulderPitch = -rightHipPitch * 0.72;
+      leftElbowFlex = 0.25 + Math.max(0, leftShoulderPitch) * 0.45;
+      rightElbowFlex = 0.25 + Math.max(0, rightShoulderPitch) * 0.45;
 
+      // Mode-specific upper body gestures
       if (cfg.mode === 'stroller') {
-        leftShoulderPitch = -0.58;
-        rightShoulderPitch = -0.58;
-        leftElbowFlex = 0.92;
-        rightElbowFlex = 0.92;
+        leftShoulderPitch = -0.55;
+        rightShoulderPitch = -0.55;
+        leftElbowFlex = 0.9;
+        rightElbowFlex = 0.9;
       } else if (cfg.mode === 'dog-walker') {
-        rightShoulderPitch = -0.48;
-        rightElbowFlex = 0.65;
+        rightShoulderPitch = -0.45;
+        rightElbowFlex = 0.62;
       } else if (cfg.mode === 'couple-left') {
-        headYaw = 0.35 + Math.sin(t * 1.6) * 0.12;
-        headPitch = Math.sin(t * 2.2) * 0.08;
-        if (Math.sin(t * 0.7) > 0.25) {
-          leftShoulderPitch = -0.65 + Math.sin(t * 3) * 0.2;
-          leftElbowFlex = 1.15;
-        }
+        headYaw = 0.32 + Math.sin(t * 1.4) * 0.1;
+        headPitch = Math.sin(t * 2.0) * 0.06;
       } else if (cfg.mode === 'couple-right') {
-        headYaw = -0.35 + Math.sin(t * 1.6 + 0.4) * 0.1;
-        headRoll = 0.08;
+        headYaw = -0.32 + Math.sin(t * 1.4 + 0.3) * 0.08;
+        headRoll = 0.06;
+      } else {
+        // Natural curious head looking at scenery
+        headYaw = Math.sin(t * 0.8 + index) * 0.18;
+        headPitch = Math.sin(t * 1.1 + index) * 0.06;
       }
     }
 
@@ -245,180 +261,173 @@ const WalkerAgent: React.FC<{ cfg: CharacterConfig; index: number }> = ({ cfg, i
 };
 
 export const Walkers: React.FC = () => {
-  // Define character specifications distributed between the Perimeter Athletic Runway and Interior Paths
   const charactersConfig: CharacterConfig[] = useMemo(() => [
-    // ==========================================
-    // A. PERIMETER RUNWAY TRACK ATHLETES
-    // ==========================================
-    // 1. Lead Marathon Sprinter
+    // RUNNERS ON PERIMETER RUNWAY
     {
-      id: 'runway-runner-1',
-      speed: 0.058,
+      id: 'runner-marathoner',
+      speed: 0.038,
       offset: 0.05,
-      laneOffset: -0.9,
+      laneOffset: 0.55,
       curve: perimeterRunwayCurve,
       skin: '#C68642',
       shirt: '#DC2626',
-      pants: '#111827',
-      shoes: '#F97316',
-      hair: '#1F2937',
+      pants: '#0F172A',
+      shoes: '#FACC15',
+      hair: '#171717',
       hairStyle: 'short',
-      hasHat: true,
-      hatColor: '#DC2626',
       hasWatch: true,
-      scale: 1.0,
+      scale: 1.02,
       mode: 'sprint',
     },
-    // 2. Pace Runner with Ponytail
     {
-      id: 'runway-runner-2',
-      speed: 0.048,
-      offset: 0.42,
-      laneOffset: 0.8,
+      id: 'runner-jogger-fast',
+      speed: 0.032,
+      offset: 0.35,
+      laneOffset: -0.5,
       curve: perimeterRunwayCurve,
-      skin: '#E5A97D',
+      skin: '#F1C27D',
       shirt: '#0284C7',
       pants: '#1E293B',
-      shoes: '#F43F5E',
-      hair: '#78350F',
+      shoes: '#FFFFFF',
+      hair: '#8D5524',
       hairStyle: 'ponytail',
-      hasWatch: true,
-      scale: 0.94,
-      mode: 'jog',
-    },
-    // 3. Steady Endurance Jogger
-    {
-      id: 'runway-runner-3',
-      speed: 0.045,
-      offset: 0.78,
-      laneOffset: -0.3,
-      curve: perimeterRunwayCurve,
-      skin: '#8D5524',
-      shirt: '#10B981',
-      pants: '#374151',
-      shoes: '#FDE047',
-      hair: '#111827',
-      hairStyle: 'short',
-      hasWatch: true,
+      hasHat: true,
+      hatColor: '#FFFFFF',
       scale: 0.98,
       mode: 'jog',
     },
-    // 4. Power Walker on the Runway
     {
-      id: 'runway-walker-1',
-      speed: 0.026,
-      offset: 0.22,
-      laneOffset: 1.2,
+      id: 'runner-tempo',
+      speed: 0.029,
+      offset: 0.68,
+      laneOffset: 0.25,
       curve: perimeterRunwayCurve,
-      skin: '#F0C29E',
-      shirt: '#F59E0B',
-      pants: '#1E293B',
-      shoes: '#FFFFFF',
-      hair: '#D97706',
-      hairStyle: 'bun',
-      scale: 0.95,
+      skin: '#8D5524',
+      shirt: '#10B981',
+      pants: '#0F172A',
+      shoes: '#FB923C',
+      hair: '#111827',
+      hairStyle: 'short',
+      hasWatch: true,
+      scale: 1.0,
+      mode: 'jog',
+    },
+    {
+      id: 'runner-power-walk',
+      speed: 0.022,
+      offset: 0.88,
+      laneOffset: -0.6,
+      curve: perimeterRunwayCurve,
+      skin: '#E0AC69',
+      shirt: '#8B5CF6',
+      pants: '#334155',
+      shoes: '#E2E8F0',
+      hair: '#4A2E18',
+      hairStyle: 'curly',
+      scale: 0.97,
       mode: 'power-walk',
     },
 
-    // ==========================================
-    // B. INTERIOR COBBLESTONE PATH WALKERS
-    // ==========================================
-    // 5. Conversing Couple - Partner A
+    // STROLLER PARENT ON MAIN PATH
     {
-      id: 'couple-1',
-      speed: 0.016,
-      offset: 0.12,
-      laneOffset: -0.45,
-      curve: mainParkCurve,
-      skin: '#E5A97D',
-      shirt: '#3B82F6',
-      pants: '#1E293B',
-      shoes: '#2B1E16',
-      hair: '#3E2723',
-      hairStyle: 'short',
-      hasWatch: true,
-      scale: 0.95,
-      mode: 'couple-left',
-    },
-    // 6. Conversing Couple - Partner B
-    {
-      id: 'couple-2',
-      speed: 0.016,
+      id: 'walker-stroller',
+      speed: 0.014,
       offset: 0.12,
       laneOffset: 0.45,
       curve: mainParkCurve,
-      skin: '#F0C29E',
-      shirt: '#EC4899',
-      pants: '#FAF5FF',
-      shoes: '#FFFFFF',
-      hair: '#D97706',
-      hairStyle: 'long',
-      hasBag: true,
-      scale: 0.9,
-      mode: 'couple-right',
-    },
-    // 7. Dog Walker with Golden Retriever
-    {
-      id: 'dog-walker',
-      speed: 0.02,
-      offset: 0.68,
-      laneOffset: -0.45,
-      curve: mainParkCurve,
-      skin: '#E8B98A',
-      shirt: '#059669',
-      pants: '#374151',
-      shoes: '#4A3B32',
-      hair: '#6B7280',
-      hairStyle: 'short',
-      hasGlasses: true,
-      scale: 0.96,
-      mode: 'dog-walker',
-    },
-    // 8. Parent pushing Baby Stroller
-    {
-      id: 'stroller-parent',
-      speed: 0.015,
-      offset: 0.35,
-      laneOffset: 0.35,
-      curve: mainParkCurve,
-      skin: '#D4A373',
-      shirt: '#7C3AED',
-      pants: '#4B5563',
-      shoes: '#FFFFFF',
-      hair: '#4A2810',
+      skin: '#F5D0A9',
+      shirt: '#EA580C',
+      pants: '#1E293B',
+      shoes: '#F8FAFC',
+      hair: '#3B2219',
       hairStyle: 'bun',
-      scale: 0.94,
+      hasGlasses: true,
+      scale: 0.98,
       mode: 'stroller',
     },
-    // 9. Secondary Path Stroller near Pond
+
+    // DOG WALKER ON MAIN PATH
     {
-      id: 'sec-walker-1',
-      speed: 0.022,
-      offset: 0.25,
+      id: 'walker-dog',
+      speed: 0.016,
+      offset: 0.52,
+      laneOffset: -0.4,
+      curve: mainParkCurve,
+      skin: '#C68642',
+      shirt: '#0D9488',
+      pants: '#475569',
+      shoes: '#38281C',
+      hair: '#171717',
+      hairStyle: 'short',
+      hasHat: true,
+      hatColor: '#1E293B',
+      scale: 1.0,
+      mode: 'dog-walker',
+    },
+
+    // ROMANTIC COUPLE ON MAIN PATH
+    {
+      id: 'couple-man',
+      speed: 0.012,
+      offset: 0.78,
+      laneOffset: 0.32,
+      curve: mainParkCurve,
+      skin: '#E0AC69',
+      shirt: '#4F46E5',
+      pants: '#1E293B',
+      shoes: '#451A03',
+      hair: '#29180E',
+      hairStyle: 'short',
+      scale: 1.02,
+      mode: 'couple-left',
+    },
+    {
+      id: 'couple-woman',
+      speed: 0.012,
+      offset: 0.78,
+      laneOffset: -0.32,
+      curve: mainParkCurve,
+      skin: '#F1C27D',
+      shirt: '#EC4899',
+      pants: '#F8FAFC',
+      shoes: '#F43F5E',
+      hair: '#C4823F',
+      hairStyle: 'long',
+      scale: 0.95,
+      mode: 'couple-right',
+    },
+
+    // CASUAL STROLLERS ON SECONDARY PATH
+    {
+      id: 'walker-flaneur',
+      speed: 0.013,
+      offset: 0.28,
+      laneOffset: 0.0,
+      curve: secondaryParkCurve,
+      skin: '#D29B62',
+      shirt: '#D97706',
+      pants: '#334155',
+      shoes: '#1E293B',
+      hair: '#1F2937',
+      hairStyle: 'curly',
+      hasBag: true,
+      hasGlasses: true,
+      scale: 0.99,
+      mode: 'walk',
+    },
+    {
+      id: 'walker-student',
+      speed: 0.015,
+      offset: 0.65,
       laneOffset: 0.2,
       curve: secondaryParkCurve,
       skin: '#F5D0A9',
-      shirt: '#84CC16',
+      shirt: '#059669',
       pants: '#1E293B',
-      shoes: '#333333',
-      hair: '#1E1B4B',
-      hairStyle: 'curly',
-      scale: 0.95,
-      mode: 'walk',
-    },
-    // 10. Secondary Path Walker
-    {
-      id: 'sec-walker-2',
-      speed: 0.02,
-      offset: 0.72,
-      laneOffset: -0.25,
-      curve: secondaryParkCurve,
-      skin: '#C68642',
-      shirt: '#F43F5E',
-      pants: '#475569',
-      shoes: '#4A3B32',
-      hair: '#292524',
-      hairStyle: 'short',
+      shoes: '#FFFFFF',
+      hair: '#3B2219',
+      hairStyle: 'ponytail',
+      hasBag: true,
       scale: 0.96,
       mode: 'walk',
     },
@@ -426,43 +435,9 @@ export const Walkers: React.FC = () => {
 
   return (
     <group>
-      {/* 1. Track Runners & Path Walkers */}
       {charactersConfig.map((cfg, idx) => (
         <WalkerAgent key={cfg.id} cfg={cfg} index={idx} />
       ))}
-
-      {/* 2. Shaded Grove Bench Reader */}
-      <group position={[-4, getTerrainHeight(-4, 3.8), 3.8]} rotation={[0, 0.3, 0]}>
-        <group position={[0.2, 0.05, 0]}>
-          <Humanoid
-            isSitting={true}
-            skinColor="#E5A97D"
-            shirtColor="#059669"
-            pantsColor="#1E293B"
-            shoesColor="#38281C"
-            hairColor="#522504"
-            hairStyle="short"
-            hasGlasses={true}
-            scale={0.92}
-            headPitch={0.35}
-            headYaw={0.15}
-            leftShoulderPitch={-0.65}
-            leftElbowFlex={1.3}
-            rightShoulderPitch={-0.65}
-            rightElbowFlex={1.3}
-          />
-          <group position={[0.05, 0.62, 0.32]} rotation={[0.42, 0, 0]}>
-            <mesh castShadow>
-              <boxGeometry args={[0.28, 0.025, 0.19]} />
-              <meshStandardMaterial color="#FEF08A" roughness={0.8} />
-            </mesh>
-            <mesh position={[0, 0.015, 0]}>
-              <boxGeometry args={[0.26, 0.015, 0.17]} />
-              <meshStandardMaterial color="#FFFFFF" roughness={0.9} />
-            </mesh>
-          </group>
-        </group>
-      </group>
     </group>
   );
 };

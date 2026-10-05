@@ -10,14 +10,15 @@ import {
   getMinDistanceToPoints,
 } from '../pathData';
 
-// Custom Grass Shader with wind propagation and height color gradient
+// Realistic High-Fidelity Grass Shader with Wind Waves and Sun Subsurface Scatter
 const GrassShader = {
   uniforms: {
     uTime: { value: 0 },
-    uWindStrength: { value: 0.4 },
-    uBaseColor: { value: new THREE.Color('#3B6E32') },
-    uTipColor: { value: new THREE.Color('#98C944') },
-    uSunTipColor: { value: new THREE.Color('#F0DA72') },
+    uWindStrength: { value: 0.45 },
+    uBaseColor: { value: new THREE.Color('#2D5422') },     // Deep rich root green
+    uMidColor: { value: new THREE.Color('#5E9E38') },      // Meadow spring green
+    uTipColor: { value: new THREE.Color('#9CD845') },      // Sunlit lush tip green
+    uHighlightColor: { value: new THREE.Color('#F2E278') },// Golden sun highlight
   },
   vertexShader: `
     uniform float uTime;
@@ -26,6 +27,7 @@ const GrassShader = {
     varying vec2 vUv;
     varying float vRandom;
     varying vec3 vWorldPosition;
+    varying vec3 vNormal;
 
     void main() {
       vUv = uv;
@@ -35,42 +37,58 @@ const GrassShader = {
       mat4 instanceMat = instanceMatrix;
       vec4 worldInstancePos = instanceMat * vec4(0.0, 0.0, 0.0, 1.0);
       
-      // Wind wave calculations across world space
-      float windWave1 = sin(worldInstancePos.x * 0.3 + worldInstancePos.z * 0.2 + uTime * 2.2);
-      float windWave2 = cos(worldInstancePos.x * 0.6 - worldInstancePos.z * 0.4 + uTime * 1.6) * 0.5;
-      float totalWind = (windWave1 + windWave2) * uWindStrength;
+      // Dual harmonic traveling wind wave
+      float wave1 = sin(worldInstancePos.x * 0.22 + worldInstancePos.z * 0.18 + uTime * 2.4);
+      float wave2 = cos(worldInstancePos.x * 0.55 - worldInstancePos.z * 0.35 + uTime * 1.7) * 0.6;
+      float gust = sin(worldInstancePos.x * 0.08 + worldInstancePos.z * 0.06 + uTime * 0.9) * 0.4;
+      
+      float totalWind = (wave1 + wave2 + gust) * uWindStrength;
 
-      // Height bend factor (root is static uv.y = 0, tip moves most uv.y = 1)
-      float bend = pow(uv.y, 1.6) * totalWind * (0.6 + aRandom * 0.8);
+      // Parabolic bend from root (uv.y = 0) to tip (uv.y = 1)
+      float bendFactor = pow(uv.y, 1.8) * totalWind * (0.75 + aRandom * 0.5);
 
       vec3 transformed = position;
-      transformed.x += bend * 0.35;
-      transformed.z += bend * 0.25;
-      transformed.y -= abs(bend) * 0.08;
+      transformed.x += bendFactor * 0.42;
+      transformed.z += bendFactor * 0.32;
+      transformed.y -= abs(bendFactor) * 0.12;
 
       vec4 worldPosition = instanceMat * vec4(transformed, 1.0);
       vWorldPosition = worldPosition.xyz;
+      vNormal = normalize((instanceMat * vec4(normal, 0.0)).xyz);
+      
       gl_Position = projectionMatrix * viewMatrix * worldPosition;
     }
   `,
   fragmentShader: `
     uniform vec3 uBaseColor;
+    uniform vec3 uMidColor;
     uniform vec3 uTipColor;
-    uniform vec3 uSunTipColor;
+    uniform vec3 uHighlightColor;
     varying vec2 vUv;
     varying float vRandom;
     varying vec3 vWorldPosition;
+    varying vec3 vNormal;
 
     void main() {
-      // Color gradient from base to tip
-      vec3 tipC = mix(uTipColor, uSunTipColor, vRandom * 0.6);
-      vec3 color = mix(uBaseColor, tipC, vUv.y);
+      // Base-to-tip multi-tier organic gradient
+      vec3 col;
+      if (vUv.y < 0.45) {
+        col = mix(uBaseColor, uMidColor, vUv.y / 0.45);
+      } else {
+        vec3 tipBlend = mix(uTipColor, uHighlightColor, vRandom * 0.45);
+        col = mix(uMidColor, tipBlend, (vUv.y - 0.45) / 0.55);
+      }
 
-      // Subtle ambient occlusion near base
-      float ao = clamp(vUv.y * 1.4, 0.4, 1.0);
-      color *= ao;
+      // Root Ambient Occlusion (soil shadow depth)
+      float ao = clamp(pow(vUv.y, 0.6) * 1.35, 0.35, 1.0);
+      col *= ao;
 
-      gl_FragColor = vec4(color, 1.0);
+      // Sunlit specular rim lighting simulation
+      vec3 lightDir = normalize(vec3(0.5, 0.8, 0.5));
+      float sunGlint = pow(max(dot(vNormal, lightDir), 0.0), 4.0) * 0.25 * vUv.y;
+      col += sunGlint;
+
+      gl_FragColor = vec4(col, 1.0);
     }
   `,
 };
@@ -89,14 +107,60 @@ export const GrassField: React.FC = () => {
   const flowersMeshRef = useRef<THREE.InstancedMesh>(null);
   const shaderMatRef = useRef<THREE.ShaderMaterial>(null);
 
-  const instanceCount = qualityTier === 'high' ? 40000 : qualityTier === 'medium' ? 24000 : 12000;
-  const flowerCount = qualityTier === 'high' ? 800 : qualityTier === 'medium' ? 450 : 200;
+  const instanceCount = qualityTier === 'high' ? 42000 : qualityTier === 'medium' ? 26000 : 14000;
+  const flowerCount = qualityTier === 'high' ? 900 : qualityTier === 'medium' ? 500 : 250;
 
-  // Single blade geometry (manicured, neat park lawn height)
+  // Realistic Curved Grass Blade Geometry (2 crossed tapered blades for full 3D volume)
   const bladeGeo = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(0.085, 0.34, 1, 3);
-    geo.translate(0, 0.17, 0); // origin at root
-    return geo;
+    // Single curved tapered quad blade
+    const shape = new THREE.BufferGeometry();
+    const positions = new Float32Array([
+      // Plane 1 (Facing forward)
+      -0.05, 0.0, 0.0,   // 0: base left
+       0.05, 0.0, 0.0,   // 1: base right
+      -0.038, 0.16, 0.02,// 2: mid left
+       0.038, 0.16, 0.02,// 3: mid right
+       0.0, 0.36, 0.06,  // 4: tip
+
+      // Plane 2 (Crossed at 60 degrees)
+      -0.045, 0.0, -0.02,
+       0.045, 0.0, 0.02,
+      -0.032, 0.15, -0.01,
+       0.032, 0.15, 0.03,
+       0.0, 0.32, 0.04,
+    ]);
+
+    const uvs = new Float32Array([
+      // Plane 1 UVs
+      0.0, 0.0,
+      1.0, 0.0,
+      0.0, 0.45,
+      1.0, 0.45,
+      0.5, 1.0,
+
+      // Plane 2 UVs
+      0.0, 0.0,
+      1.0, 0.0,
+      0.0, 0.45,
+      1.0, 0.45,
+      0.5, 1.0,
+    ]);
+
+    const indices = [
+      // Plane 1
+      0, 1, 2,  1, 3, 2,
+      2, 3, 4,
+      // Plane 2
+      5, 6, 7,  6, 8, 7,
+      7, 8, 9,
+    ];
+
+    shape.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    shape.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    shape.setIndex(indices);
+    shape.computeVertexNormals();
+
+    return shape;
   }, []);
 
   // Scatter instances deterministically avoiding paths, runway, pond, gazebo, playground, and painters lawn
@@ -112,53 +176,44 @@ export const GrassField: React.FC = () => {
 
     while (seededCount < instanceCount && attempts < maxAttempts) {
       attempts++;
-      const x = (rng() - 0.5) * 65;
-      const z = (rng() - 0.5) * 65;
+      const x = (rng() - 0.5) * 66;
+      const z = (rng() - 0.5) * 66;
 
-      // Exclude Perimeter Runway (width ~ 3.8m -> margin ~ 2.2m)
-      const dRunway = getMinDistanceToPoints(x, z, runwaySamplePoints);
-      if (dRunway < 2.2) continue;
+      // Exclude Perimeter Runway (margin ~ 2.2m)
+      if (getMinDistanceToPoints(x, z, runwaySamplePoints) < 2.2) continue;
 
-      // Exclude Main Cobblestone Path (width ~ 2.6m -> margin ~ 1.5m)
-      const dMainPath = getMinDistanceToPoints(x, z, mainPathSamplePoints);
-      if (dMainPath < 1.5) continue;
+      // Exclude Main Cobblestone Path (margin ~ 1.5m)
+      if (getMinDistanceToPoints(x, z, mainPathSamplePoints) < 1.5) continue;
 
-      // Exclude Secondary Cobblestone Path (width ~ 1.8m -> margin ~ 1.1m)
-      const dSecPath = getMinDistanceToPoints(x, z, secondaryPathSamplePoints);
-      if (dSecPath < 1.1) continue;
+      // Exclude Secondary Cobblestone Path (margin ~ 1.1m)
+      if (getMinDistanceToPoints(x, z, secondaryPathSamplePoints) < 1.1) continue;
 
       // Exclude pond area (center ~ [8, 4], r ~ 5.5)
-      const dPond = Math.hypot(x - 8, z - 4);
-      if (dPond < 5.5) continue;
+      if (Math.hypot(x - 8, z - 4) < 5.5) continue;
 
       // Exclude gazebo area (center ~ [-8, -10], r ~ 4.5)
-      const dGazebo = Math.hypot(x - -8, z - -10);
-      if (dGazebo < 4.5) continue;
+      if (Math.hypot(x - -8, z - -10) < 4.5) continue;
 
       // Exclude playground area (center ~ [-13, 8], r ~ 6.5)
-      const dPlayground = Math.hypot(x - -13, z - 8);
-      if (dPlayground < 6.5) continue;
+      if (Math.hypot(x - -13, z - 8) < 6.5) continue;
 
       // Exclude fountain area (center ~ [4, -8], r ~ 4)
-      const dFountain = Math.hypot(x - 4, z - -8);
-      if (dFountain < 4) continue;
+      if (Math.hypot(x - 4, z - -8) < 4) continue;
 
       // Exclude painter 1 lawn mat area (center ~ [-3.2, 4.2], r ~ 2.4)
-      const dPainter1 = Math.hypot(x - -3.2, z - 4.2);
-      if (dPainter1 < 2.4) continue;
+      if (Math.hypot(x - -3.2, z - 4.2) < 2.4) continue;
 
       // Exclude painter 2 stool area (center ~ [1.2, 6.4], r ~ 1.8)
-      const dPainter2 = Math.hypot(x - 1.2, z - 6.4);
-      if (dPainter2 < 1.8) continue;
+      if (Math.hypot(x - 1.2, z - 6.4) < 1.8) continue;
 
       const y = getTerrainHeight(x, z);
 
       dummy.position.set(x, y, z);
       dummy.rotation.y = rng() * Math.PI * 2;
-      dummy.rotation.x = (rng() - 0.5) * 0.1;
-      dummy.rotation.z = (rng() - 0.5) * 0.1;
-      const scale = 0.75 + rng() * 0.45;
-      dummy.scale.set(scale, scale * (0.8 + rng() * 0.4), scale);
+      dummy.rotation.x = (rng() - 0.5) * 0.12;
+      dummy.rotation.z = (rng() - 0.5) * 0.12;
+      const scale = 0.85 + rng() * 0.45;
+      dummy.scale.set(scale, scale * (0.85 + rng() * 0.4), scale);
       dummy.updateMatrix();
 
       matrices.push(dummy.matrix.clone());
@@ -169,7 +224,6 @@ export const GrassField: React.FC = () => {
     return { grassMatrices: matrices, randoms: rands };
   }, [instanceCount]);
 
-  // Apply matrices to instanced mesh
   useEffect(() => {
     if (!grassMeshRef.current) return;
     for (let i = 0; i < grassMatrices.length; i++) {
@@ -181,10 +235,11 @@ export const GrassField: React.FC = () => {
     bladeGeo.setAttribute('aRandom', randAttr);
   }, [grassMatrices, randoms, bladeGeo]);
 
-  // Scatter flowers deterministically
+  // Scatter realistic flowers with petal geometry
   const flowerGeo = useMemo(() => {
-    const geo = new THREE.SphereGeometry(0.065, 4, 4);
-    geo.translate(0, 0.22, 0);
+    // 5-petal flower disc
+    const geo = new THREE.CylinderGeometry(0.08, 0.02, 0.04, 6);
+    geo.translate(0, 0.28, 0);
     return geo;
   }, []);
 
@@ -193,8 +248,8 @@ export const GrassField: React.FC = () => {
     const matrices: THREE.Matrix4[] = [];
     const dummy = new THREE.Object3D();
     for (let i = 0; i < flowerCount; i++) {
-      const x = (rng() - 0.5) * 55;
-      const z = (rng() - 0.5) * 55;
+      const x = (rng() - 0.5) * 56;
+      const z = (rng() - 0.5) * 56;
       if (getMinDistanceToPoints(x, z, runwaySamplePoints) < 2.2) continue;
       if (getMinDistanceToPoints(x, z, mainPathSamplePoints) < 1.5) continue;
       if (getMinDistanceToPoints(x, z, secondaryPathSamplePoints) < 1.1) continue;
@@ -204,7 +259,9 @@ export const GrassField: React.FC = () => {
       const y = getTerrainHeight(x, z);
       dummy.position.set(x, y, z);
       dummy.rotation.y = rng() * Math.PI * 2;
-      const s = 0.7 + rng() * 0.5;
+      dummy.rotation.x = (rng() - 0.5) * 0.2;
+      dummy.rotation.z = (rng() - 0.5) * 0.2;
+      const s = 0.8 + rng() * 0.5;
       dummy.scale.set(s, s, s);
       dummy.updateMatrix();
       matrices.push(dummy.matrix.clone());
@@ -212,14 +269,14 @@ export const GrassField: React.FC = () => {
     return matrices;
   }, [flowerCount]);
 
-
   useEffect(() => {
     if (!flowersMeshRef.current) return;
     const colors = [
       new THREE.Color('#FFDF00'), // Buttercup Yellow
       new THREE.Color('#FFFFFF'), // Daisy White
-      new THREE.Color('#FF6B6B'), // Wild Poppy Pink/Red
-      new THREE.Color('#9C27B0'), // Lavender Purple
+      new THREE.Color('#FF6584'), // Meadow Poppy Pink
+      new THREE.Color('#A855F7'), // Lavender Violet
+      new THREE.Color('#38BDF8'), // Wild Bluebell
     ];
     for (let i = 0; i < flowerMatrices.length; i++) {
       flowersMeshRef.current.setMatrixAt(i, flowerMatrices[i]);
@@ -256,7 +313,7 @@ export const GrassField: React.FC = () => {
         args={[flowerGeo, undefined, flowerMatrices.length]}
         castShadow
       >
-        <meshStandardMaterial roughness={0.5} />
+        <meshStandardMaterial roughness={0.4} metalness={0.1} />
       </instancedMesh>
     </group>
   );

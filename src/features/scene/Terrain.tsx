@@ -148,7 +148,7 @@ export const Terrain: React.FC = () => {
           map={grassTex}
           roughness={0.88}
           metalness={0.02}
-          color="#A4C784"
+          color="#FFFFFF"
         />
       </mesh>
 

@@ -1,6 +1,5 @@
 import React, { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { PerformanceMonitor } from '@react-three/drei';
 import * as THREE from 'three';
 import { Lighting } from './Lighting';
 import { Terrain } from './Terrain';
@@ -49,14 +48,13 @@ const SceneLoader: React.FC = () => {
 
 export const Scene: React.FC = () => {
   const qualityTier = useAppStore((s) => s.qualityTier);
-  const setQualityTier = useAppStore((s) => s.setQualityTier);
 
   return (
     <div className="w-full h-full relative overflow-hidden bg-park-cream select-none">
       <Suspense fallback={<SceneLoader />}>
         <Canvas
           shadows={qualityTier !== 'low' ? 'soft' : false}
-          camera={{ position: [-18, 22, 34], fov: 40, near: 0.1, far: 250 }}
+          camera={{ position: [-14, 11, 24], fov: 42, near: 0.1, far: 320 }}
           dpr={[1, qualityTier === 'high' ? 1.75 : 1.25]}
           gl={{
             powerPreference: 'high-performance',
@@ -69,7 +67,7 @@ export const Scene: React.FC = () => {
           <SceneDirector />
           <Lighting />
 
-          {/* Park Environment with Perimeter Runway */}
+          {/* Park Ground & Water with Perimeter Runway */}
           <Terrain />
           <Pond />
           <GrassField />
@@ -88,7 +86,7 @@ export const Scene: React.FC = () => {
           {/* Focal Interactive Painters */}
           <Painters />
 
-          {/* Sky & Atmosphere (with Birds & City Skyline) */}
+          {/* Surrounding City Skyline & Sky Atmosphere */}
           <CitySkyline />
           <Clouds />
           <Particles />
