@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { useAppStore } from '@/app/store';
+import { CaptchaWidget } from './CaptchaWidget';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -31,6 +32,8 @@ export const LoginForm: React.FC = () => {
   });
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
+  const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
+  const [captchaError, setCaptchaError] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
   const [status, setStatus] = useState<{ state: 'idle' | 'loading' | 'done' | 'info'; message: string }>({
@@ -61,15 +64,31 @@ export const LoginForm: React.FC = () => {
     setCapsLock(Boolean(e.getModifierState?.('CapsLock')));
   };
 
+  const handleCaptchaChange = (verified: boolean) => {
+    setIsCaptchaVerified(verified);
+    if (verified) {
+      setCaptchaError(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs = validateForm(form.email, form.password);
     setErrors(errs);
     setTouched({ email: true, password: true });
 
+    if (!isCaptchaVerified) {
+      setCaptchaError(true);
+    }
+
     const errKeys = Object.keys(errs) as (keyof typeof errs)[];
     if (errKeys.length > 0) {
       document.getElementById(`${id}-${errKeys[0]}`)?.focus();
+      return;
+    }
+
+    if (!isCaptchaVerified) {
+      document.getElementById(`${id}-captcha`)?.focus();
       return;
     }
 
@@ -308,6 +327,25 @@ export const LoginForm: React.FC = () => {
           </span>
           <span>Keep me signed in on this device</span>
         </label>
+
+        {/* reCAPTCHA "I'm not a robot" Widget */}
+        <div className="login-form-module__PK4fKq__field">
+          <CaptchaWidget
+            id={`${id}-captcha`}
+            verified={isCaptchaVerified}
+            onChange={handleCaptchaChange}
+            hasError={captchaError}
+          />
+          {captchaError && (
+            <p id={`${id}-captcha-error`} className="recaptcha-error-text" role="alert">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" fill="none" strokeWidth="2" />
+                <path d="M12 7.5v5.5M12 16.5v.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <span>Please verify that you are not a robot.</span>
+            </p>
+          )}
+        </div>
 
         {/* Submit */}
         <button

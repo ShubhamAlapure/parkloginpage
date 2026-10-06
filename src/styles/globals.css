@@ -586,6 +586,224 @@
   outline-offset: 2px;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Google reCAPTCHA Widget
+   ───────────────────────────────────────────────────────────── */
+.recaptcha-widget-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 304px;
+  min-height: 74px;
+  background-color: #f9f9f9;
+  border: 1px solid #d3d3d3;
+  border-radius: 4px;
+  box-shadow: 0 0 4px 1px rgba(0, 0, 0, 0.08);
+  padding: 8px 12px;
+  margin: 2px 0 4px 0;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  user-select: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .recaptcha-widget-container {
+    background-color: #222924;
+    border-color: #38453c;
+    box-shadow: 0 0 6px 1px rgba(0, 0, 0, 0.25);
+  }
+}
+
+.recaptcha-widget-container.recaptcha-error {
+  border-color: var(--danger, #b3261e);
+  box-shadow: 0 0 0 1px var(--danger, #b3261e), 0 0 4px 1px rgba(179, 38, 30, 0.2);
+}
+
+.recaptcha-left {
+  display: flex;
+  align-items: center;
+}
+
+.recaptcha-checkbox-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+.recaptcha-checkbox-btn:focus-visible {
+  outline: none;
+}
+
+.recaptcha-checkbox-box {
+  width: 28px;
+  height: 28px;
+  background-color: #ffffff;
+  border: 2px solid #c1c1c1;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .recaptcha-checkbox-box {
+    background-color: #1a221d;
+    border-color: #556358;
+  }
+}
+
+.recaptcha-checkbox-btn:hover .recaptcha-checkbox-box {
+  border-color: #a0a0a0;
+}
+
+.recaptcha-checkbox-btn:focus-visible .recaptcha-checkbox-box {
+  border-color: #4285f4;
+  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.3);
+}
+
+.recaptcha-label {
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #282727;
+  letter-spacing: 0.1px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .recaptcha-label {
+    color: #e2e8e4;
+  }
+}
+
+.recaptcha-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid #4285f4;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: recaptcha-spin 0.75s linear infinite;
+}
+
+@keyframes recaptcha-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.recaptcha-checkmark {
+  width: 22px;
+  height: 22px;
+  animation: recaptcha-check-pop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes recaptcha-check-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.recaptcha-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-left: 12px;
+  user-select: none;
+}
+
+.recaptcha-logo-wrap {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.recaptcha-logo-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.recaptcha-brand-text {
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: #555555;
+  margin-top: 1px;
+  line-height: 1.1;
+  letter-spacing: 0.2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .recaptcha-brand-text {
+    color: #98a39b;
+  }
+}
+
+.recaptcha-links {
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 8px;
+  color: #555555;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .recaptcha-links {
+    color: #7d8b81;
+  }
+}
+
+.recaptcha-links a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.recaptcha-links a:hover {
+  text-decoration: underline;
+}
+
+.recaptcha-links-dot {
+  font-size: 8px;
+  opacity: 0.7;
+}
+
+.recaptcha-error-text {
+  color: var(--danger, #b3261e);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -2px 0 4px 0;
+}
+
+.recaptcha-error-text svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
 .login-form-module__PK4fKq__submit,
 .login-submit {
   background: linear-gradient(180deg, var(--accent-hover), var(--accent));
